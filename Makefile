@@ -1,3 +1,7 @@
+.PHONY: all
+
+all: build
+
 install:
 	@GO111MODULE=on go install -ldflags="-s -w"
 

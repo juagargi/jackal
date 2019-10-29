@@ -12,34 +12,25 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/lucas-clemente/quic-go"
-	"github.com/netsec-ethz/scion-apps/lib/scionutil"
 	streamerror "github.com/ortuman/jackal/errors"
 	"github.com/ortuman/jackal/log"
 	"github.com/ortuman/jackal/module"
 	"github.com/ortuman/jackal/router"
 	"github.com/ortuman/jackal/stream"
 	"github.com/ortuman/jackal/transport"
-	"github.com/scionproto/scion/go/lib/addr"
-	"github.com/scionproto/scion/go/lib/sciond"
-	"github.com/scionproto/scion/go/lib/snet"
-	"github.com/scionproto/scion/go/lib/snet/squic"
-	"github.com/scionproto/scion/go/lib/sock/reliable"
 )
 
 var listenerProvider = net.Listen
 
 type server struct {
-	cfg            *Config
-	router         *router.Router
-	mods           *module.Modules
-	dialer         *dialer
-	inConns        sync.Map
-	outConns       sync.Map
-	ln             net.Listener
-	lnQUIC         quic.Listener
-	listening      uint32
-	listeningSCION uint32
+	cfg       *Config
+	router    *router.Router
+	mods      *module.Modules
+	dialer    *dialer
+	inConns   sync.Map
+	outConns  sync.Map
+	ln        net.Listener
+	listening uint32
 }
 
 func (s *server) start() {
@@ -54,70 +45,19 @@ func (s *server) start() {
 	}
 }
 
-func (s *server) startScion() {
-	serverPort := uint16(s.cfg.Scion.Port)
-	var address *snet.Addr
-	var err error
-	if s.cfg.Scion.Address == "localhost" {
-		address, err = scionutil.GetLocalhost()
-	} else {
-		address, err = snet.AddrFromString(s.cfg.Scion.Address)
-	}
-	if err != nil {
-		log.Fatalf("s2s_in: can't get local scion address")
-	}
-	address.Host.L4 = addr.NewL4UDPInfo(serverPort)
-
-	if err := s.listenScionConn(address); err != nil {
-		log.Fatalf("%v", err)
-	}
-	log.Infof("s2s_in: Listening for SCION s2s on port %d", serverPort)
-}
-
-func (s *server) listenScionConn(address *snet.Addr) error {
-	var sciondPath string
-	var dispatcherPath string = "/run/shm/dispatcher/default.sock"
-
-	sciondPath = sciond.GetDefaultSCIONDPath(nil)
-	snet.Init(address.IA, sciondPath, reliable.NewDispatcherService(dispatcherPath))
-	err := squic.Init(s.cfg.Scion.Key, s.cfg.Scion.Cert)
-	if err != nil {
-		return err
-	}
-
-	listener, err := squic.ListenSCION(nil, address, nil)
-	if err != nil {
-		return err
-	}
-	log.Infof("listening at %s", address)
-	s.lnQUIC = listener
-	atomic.StoreUint32(&s.listeningSCION, 1)
-	for atomic.LoadUint32(&s.listeningSCION) == 1 {
-		conn, err := s.lnQUIC.Accept()
-		if err == nil {
-			log.Infof("New SCION connection")
-			accStream, err := conn.AcceptStream()
-			if err != nil {
-				log.Infof("No streams opened by the dialer")
-			}
-			isScion := true
-			go s.startInStream(transport.NewQUICSocketTransport(conn, accStream,
-				s.cfg.Scion.KeepAlive), isScion)
-			continue
-		}
-	}
-
-	return nil
-}
-
 func (s *server) shutdown(ctx context.Context) error {
 	if atomic.CompareAndSwapUint32(&s.listening, 1, 0) {
 		// stop listening...
 		if err := s.ln.Close(); err != nil {
 			return err
 		}
-
-		c, err := closeConnections(ctx, &s.inConns)
+		// close all connections...
+		c, err := closeConnections(ctx, &s.outConns)
+		if err != nil {
+			return err
+		}
+		log.Infof("%s: closed %d out connection(s)", s.cfg.ID, c)
+		c, err = closeConnections(ctx, &s.inConns)
 		if err != nil {
 			return err
 		}
@@ -137,9 +77,7 @@ func (s *server) listenConn(address string) error {
 	for atomic.LoadUint32(&s.listening) == 1 {
 		conn, err := ln.Accept()
 		if err == nil {
-			isScion := false
-			go s.startInStream(transport.NewSocketTransport(conn,
-				s.cfg.Transport.KeepAlive), isScion)
+			go s.startInStream(transport.NewSocketTransport(conn, s.cfg.Transport.KeepAlive))
 			continue
 		}
 	}
@@ -170,7 +108,7 @@ func (s *server) unregisterOutStream(stm stream.S2SOut) {
 	log.Infof("unregistered s2s out stream... (domainpair: %s)", domainPair)
 }
 
-func (s *server) startInStream(tr transport.Transport, isScion bool) {
+func (s *server) startInStream(tr transport.Transport) {
 	stm := newInStream(&streamConfig{
 		keyGen:         &keyGen{s.cfg.DialbackSecret},
 		transport:      tr,
@@ -178,8 +116,7 @@ func (s *server) startInStream(tr transport.Transport, isScion bool) {
 		maxStanzaSize:  s.cfg.MaxStanzaSize,
 		dialer:         s.dialer,
 		onInDisconnect: s.unregisterInStream,
-		streamSCION:    isScion,
-	}, s.mods, s.router)
+	}, s.mods, s.router, false)
 	s.registerInStream(stm)
 }
 
