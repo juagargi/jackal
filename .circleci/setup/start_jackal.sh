@@ -20,4 +20,4 @@ else
     mysql -h mysql_host -D jackal -u jackal -ppassword < server2.sql
 fi
 
-./jackal -c example.jackal.yml </dev/null &>/dev/null &
+./jackal -c example.jackal.yml </dev/null &> jackal.stdout &

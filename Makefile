@@ -1,8 +1,8 @@
 install:
-	@export GO111MODULE=on && go install -ldflags="-s -w" github.com/ortuman/jackal
+	@GO111MODULE=on go install -ldflags="-s -w"
 
 install-tools:
-	@export GO111MODULE=on && go get -u \
+	@GO111MODULE=on go get -u \
 		golang.org/x/lint/golint \
 		golang.org/x/tools/cmd/goimports
 
@@ -14,11 +14,11 @@ fmt: install-tools
 
 build:
 	@echo "Building binary..."
-	@export GO111MODULE=on && go build -ldflags="-s -w"
+	@GO111MODULE=on go build -ldflags="-s -w"
 
 test:
 	@echo "Running tests..."
-	@go test -race $$(go list ./...)
+	@GO111MODULE=on go test -race $$(go list ./...)
 
 coverage:
 	@echo "Generating coverage profile..."

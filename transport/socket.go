@@ -29,15 +29,6 @@ type socketTransport struct {
 	compressed bool
 }
 
-type quicsocketTransport struct {
-	conn       quic.Session
-	rw         io.ReadWriter
-	br         *bufio.Reader
-	bw         *bufio.Writer
-	keepAlive  time.Duration
-	compressed bool
-}
-
 // NewSocketTransport creates a socket class stream transport.
 func NewSocketTransport(conn net.Conn, keepAlive time.Duration) Transport {
 	s := &socketTransport{
@@ -45,18 +36,6 @@ func NewSocketTransport(conn net.Conn, keepAlive time.Duration) Transport {
 		rw:        conn,
 		br:        bufio.NewReaderSize(conn, socketBuffSize),
 		bw:        bufio.NewWriterSize(conn, socketBuffSize),
-		keepAlive: keepAlive,
-	}
-	return s
-}
-
-func NewQUICSocketTransport(conn quic.Session, uniStream quic.Stream,
-	keepAlive time.Duration) Transport {
-	s := &quicsocketTransport{
-		conn:      conn,
-		rw:        uniStream,
-		br:        bufio.NewReaderSize(uniStream, socketBuffSize),
-		bw:        bufio.NewWriterSize(uniStream, socketBuffSize),
 		keepAlive: keepAlive,
 	}
 	return s
@@ -135,62 +114,29 @@ func (s *socketTransport) PeerCertificates() []*x509.Certificate {
 	return nil
 }
 
-func (s *quicsocketTransport) Read(p []byte) (n int, err error) {
+type quicSocketTransport struct {
+	socketTransport
+	conn quic.Session
+}
+
+func NewQUICSocketTransport(conn quic.Session, uniStream quic.Stream,
+	keepAlive time.Duration) Transport {
+	s := &quicSocketTransport{
+		socketTransport: socketTransport{
+			rw:        uniStream,
+			br:        bufio.NewReaderSize(uniStream, socketBuffSize),
+			bw:        bufio.NewWriterSize(uniStream, socketBuffSize),
+			keepAlive: keepAlive,
+		},
+		conn: conn,
+	}
+	return s
+}
+
+func (s *quicSocketTransport) Read(p []byte) (n int, err error) {
 	n, err = s.br.Read(p)
 	return n, err
 }
 
-func (s *quicsocketTransport) Write(p []byte) (n int, err error) {
-	return s.bw.Write(p)
-}
-
-func (s *quicsocketTransport) Close() error {
-	return s.conn.Close()
-}
-
-func (s *quicsocketTransport) Type() Type {
-	return Socket
-}
-
-func (s *quicsocketTransport) WriteString(str string) (int, error) {
-	n, err := io.Copy(s.bw, strings.NewReader(str))
-	return int(n), err
-}
-
-// Flush writes any buffered data to the underlying io.Writer.
-func (s *quicsocketTransport) Flush() error {
-	return s.bw.Flush()
-}
-
-func (s *quicsocketTransport) StartTLS(cfg *tls.Config, asClient bool) {
-}
-
-func (s *quicsocketTransport) EnableCompression(level compress.Level) {
-	if !s.compressed {
-		s.rw = compress.NewZlibCompressor(s.rw, s.rw, level)
-		s.bw.Reset(s.rw)
-		s.br.Reset(s.rw)
-		s.compressed = true
-	}
-}
-
-func (s *quicsocketTransport) ChannelBindingBytes(mechanism ChannelBindingMechanism) []byte {
-	if conn, ok := s.conn.(tlsStateQueryable); ok {
-		switch mechanism {
-		case TLSUnique:
-			st := conn.ConnectionState()
-			return st.TLSUnique
-		default:
-			break
-		}
-	}
-	return nil
-}
-
-func (s *quicsocketTransport) PeerCertificates() []*x509.Certificate {
-	if conn, ok := s.conn.(tlsStateQueryable); ok {
-		st := conn.ConnectionState()
-		return st.PeerCertificates
-	}
-	return nil
+func (s *quicSocketTransport) StartTLS(cfg *tls.Config, asClient bool) {
 }
