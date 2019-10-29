@@ -35,13 +35,17 @@ jobs:
 
   integration:
     docker:
-      - image: circleci/python:3.6.1
+      - image: circleci/golang:1.12
     working_directory: ~/repo
     environment:
+      GO111MODULE: "on"
       BASH_ENV: "~/repo/.circleci/bash_env.sh"
       SCION_SRC: "https://github.com/netsec-ethz/netsec-scion"
       SC: "/home/scion/go/src/github.com/scionproto/scion"
-      JACKAL_DIR: "/home/scion/go/src/github.com/ortuman/jackal"
+      JACKAL_DIR: "/root"
+      coreAS1301IP: 172.31.0.110
+      infraAS1303IP: 172.31.0.111
+      infraAS1305IP: 172.31.0.112
 
     steps:
       - checkout
@@ -49,39 +53,53 @@ jobs:
       - setup_remote_docker:
          docker_layer_caching: false #not available in the free plan
 
+      - run:
+          name: build
+          command: |
+            set -xe
+            make build
+
       # Start integration tests
       - run:
-          name: Start containers
+          name: Build containers
           command: |
-            set -x
-            export coreAS1301IP=172.31.0.110 infraAS1303IP=172.31.0.111 infraAS1305IP=172.31.0.112
-            sudo -E docker-compose -f .circleci/docker-compose.yml create coreAS1301 infraAS1303 infraAS1305
-            sudo -E docker cp ./.circleci/setup/config/coreAS1301_config.tar coreAS1301:/tmp/host_config.tar
-            sudo -E docker cp ./.circleci/setup/config/infraAS1303_config.tar infraAS1303:/tmp/host_config.tar
-            sudo -E docker cp ./.circleci/setup/config/infraAS1305_config.tar infraAS1305:/tmp/host_config.tar
-            sudo -E docker cp ./.circleci/setup/start_jackal.sh infraAS1303:${SC}/start_jackal.sh
-            sudo -E docker cp ./.circleci/setup/start_jackal.sh infraAS1305:${SC}/start_jackal.sh
+            set -xe
+            sudo -E docker-compose -f .circleci/docker-compose.yml build
+
+      - run:
+          name: Start AS Containers
+          command: |
+            set -xe
+            sudo -E docker-compose -f .circleci/docker-compose.yml up --no-start coreAS1301 infraAS1303 infraAS1305
+            for c in coreAS1301 infraAS1303 infraAS1305; do
+                sudo -E docker cp ./.circleci/setup/config/${c}_config.tar $c:/root/host_config.tar
+            done
+            for c in infraAS1303 infraAS1305; do
+                sudo -E docker cp ./.circleci/setup/start_jackal.sh $c:/root/start_jackal.sh
+                sudo -E docker cp ./jackal $c:/root/jackal
+            done
             sudo -E docker-compose -f .circleci/docker-compose.yml up --no-recreate -d coreAS1301 infraAS1303 infraAS1305
+            for c in coreAS1301 infraAS1303 infraAS1305; do
+                sudo -E docker-compose -f .circleci/docker-compose.yml exec $c /root/loadASConfig.sh
+            done
 
       - run:
           name: Check SCION connections
           command: |
-            set -x
-            # Wait for the SCION services to start
-            sudo -E docker exec coreAS1301 /bin/bash -c 'cd ${SC}; until [ `./supervisor/supervisor.sh status | grep RUNNING | wc -l` -ge 6 ]; do sleep 0.1; done;'
-            # Wait for beaconing to start
-            sudo -E docker exec infraAS1305 /bin/bash -c 'until [ `grep "Registered beacons" -s -r /var/log/scion/ | wc -l` -ge 5 ]; do sleep 0.1; done; scmp echo -c 10 -local 19-ffaa:0:1305,[127.0.0.1] -remote 19-ffaa:0:1301,[127.0.0.1];'
-            sudo -E docker exec coreAS1301 /bin/bash -c "scmp echo -c 10 -local 19-ffaa:0:1301,[127.0.0.1] -remote 19-ffaa:0:1303,[127.0.0.1]"
-            sudo -E docker exec infraAS1303 /bin/bash -c "grep -m 5 'Registered beacons' -r /var/log/scion/; scmp echo -c 10 -local 19-ffaa:0:1303,[127.0.0.1] -remote 19-ffaa:0:1301,[127.0.0.1];"
+            set -xe
+            sudo -E docker exec infraAS1303 /bin/bash -c "until grep -q 'Registered beacons debug_id' /var/log/scion/bs*.log; do sleep 1; done;"
+            sudo -E docker exec infraAS1305 /bin/bash -c "until grep -q 'Registered beacons debug_id' /var/log/scion/bs*.log; do sleep 1; done;"
+            sudo -E docker exec coreAS1301 /bin/bash -c "scmp echo -c 3 -local 19-ffaa:0:1301,[127.0.0.1] -remote 19-ffaa:0:1303,[127.0.0.1]"
+            sudo -E docker exec coreAS1301 /bin/bash -c "scmp echo -c 3 -local 19-ffaa:0:1301,[127.0.0.1] -remote 19-ffaa:0:1305,[127.0.0.1]"
 
       - run:
           name: Start jackal servers
           command: |
-            set -x
-            sudo -E docker exec infraAS1303 /bin/bash -c '${SC}/start_jackal.sh;'
-            sudo -E docker exec infraAS1303 /bin/bash -c 'until grep -q "19-ffaa:0:1303,\[127.0.0.1\]" ${JACKAL_DIR}/jackal.log; do sleep 1; done;'
-            sudo -E docker exec infraAS1305 /bin/bash -c '${SC}/start_jackal.sh;'
-            sudo -E docker exec infraAS1305 /bin/bash -c 'until grep -q "19-ffaa:0:1305,\[127.0.0.1\]" ${JACKAL_DIR}/jackal.log; do sleep 1; done;'
+            set -xe
+            sudo -E docker exec infraAS1303 /bin/bash -c '/root/start_jackal.sh;'
+            sudo -E docker exec infraAS1303 /bin/bash -c "until grep -q '19-ffaa:0:1303,\[127.0.0.1\]' ${JACKAL_DIR}/jackal.log; do sleep 1; done;"
+            sudo -E docker exec infraAS1305 /bin/bash -c '/root/start_jackal.sh;'
+            sudo -E docker exec infraAS1305 /bin/bash -c "until grep -q '19-ffaa:0:1305,\[127.0.0.1\]' ${JACKAL_DIR}/jackal.log; do sleep 1; done;"
 
       - run:
           name: Start XMPP client1

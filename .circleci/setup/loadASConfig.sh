@@ -1,15 +1,10 @@
 #!/bin/bash
-set -e
+set -ex
 
-# Get configuration
+# set configuration
 rm /etc/scion/gen -rf
-tar -C /etc/scion/ -xf /tmp/host_config.tar
-
-# restart SCION services
-cd $SC
-sed -i 's%\.\./gen%/etc/scion/gen%g' supervisor/supervisord.conf
-
-# restart SCION services
-./supervisor/supervisor.sh stop all
-./supervisor/supervisor.sh reload
-./supervisor/supervisor.sh start all
+tar -C /etc/scion/ -xf /root/host_config.tar
+for srv in `cat /etc/scion/scionlab-services.txt`; do
+    systemctl enable $srv
+done
+systemctl start scionlab.target

@@ -1,28 +1,40 @@
-FROM ethznetsec/scion_base:latest
+FROM ubuntu:xenial
 
-ARG SCION_SRC
-ARG SC
-ARG JACKAL_DIR
+# Install base
+RUN apt-get update && apt-get install --assume-yes \
+  systemd \
+  sudo \
+  apt-transport-https
 
-# Update
-RUN sudo apt-get update && sudo apt-get install --assume-yes libpcap0.8 libpcap0.8-dev
+# systemd
+# Based on: https://developers.redhat.com/blog/2014/05/05/running-systemd-within-docker-container/
+#  - converted to ubuntu, i.e. fixed some paths and removed unnecessary cleanup
+#  - keep systemd-user-sessions.service, to allow login through SSH (login disabled on startup until this is run)
+ENV container docker
+RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i = systemd-tmpfiles-setup.service ] || rm -f $i; done); \
+(cd /lib/systemd/system/multi-user.target.wants/; for i in *; do [ $i = systemd-user-sessions.service ] || rm -f $i; done); \
+rm -f /etc/systemd/system/*.wants/*; \
+rm -f /lib/systemd/system/local-fs.target.wants/*; \
+rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
+rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
+rm -f /lib/systemd/system/basic.target.wants/*;
+VOLUME [ "/sys/fs/cgroup" ]
 
-# Checkout SCION
-RUN git clone ${SCION_SRC} -b scionlab --depth 1 ${SC}
 
-RUN sudo apt-get update && sudo apt-get install --assume-yes apt-transport-https
-RUN sudo bash -c 'echo "deb [trusted=yes] https://packages.netsec.inf.ethz.ch/debian all main" >> /etc/apt/sources.list'
-RUN sudo apt-get update && sudo apt-get install --assume-yes scionlab
+# Install SCION
+RUN bash -c 'echo "deb [trusted=yes] https://packages.netsec.inf.ethz.ch/debian all main" >> /etc/apt/sources.list'
+RUN apt-get update && apt-get install --assume-yes scionlab
 
-COPY ./setup/loadASConfig.sh ${SC}/loadASConfig.sh
-RUN sudo mkdir -p /var/log/scion/
-RUN mkdir ${SC}/gen-cache
+# Add 'scionlab' user with passwordless sudo & configure authorized_keys to allow automatic deployment
+RUN sed '/^%sudo/s/ALL$/NOPASSWD:ALL/' /etc/sudoers -i
+RUN useradd --create-home --shell /bin/bash --groups sudo scionlab
 
-# install jackal dependencies
-COPY ./setup/install_jackal.sh ${SC}/install_jackal.sh
-RUN ./install_jackal.sh
+# manually prepare "gen" and services:
+COPY ./setup/loadASConfig.sh /root/
 
-# Add environment variables for execution
-ENV PYTHONPATH ${SC}/python
-ENV JACKAL_DIR ${JACKAL_DIR}
-ENV SC ${SC}
+# Jackal 
+RUN apt-get install --assume-yes mysql-client
+COPY ./setup/wait_for_db.sh /root/
+COPY testdata/ /root/
+
+ENTRYPOINT [ "/bin/systemd" ]

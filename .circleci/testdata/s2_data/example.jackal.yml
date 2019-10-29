@@ -12,7 +12,7 @@ logger:
 storage:
   type: mysql
   mysql:
-    host: 127.0.0.1:3306
+    host: mysql_host:3306
     user: jackal
     password: password
     database: jackal
@@ -22,8 +22,8 @@ router:
   hosts:
     - name: server2.xmpp
       tls:
-        privkey_path: "/home/scion/go/src/github.com/ortuman/jackal/ssl/server2.xmpp.key"
-        cert_path: "/home/scion/go/src/github.com/ortuman/jackal/ssl/server2.xmpp.crt"
+        privkey_path: "ssl/server2.xmpp.key"
+        cert_path: "ssl/server2.xmpp.crt"
 
 modules:
   enabled:
@@ -92,5 +92,5 @@ s2s:
       addr: 19-ffaa:0:1305,[127.0.0.1]
       port: 52690
       keep_alive: 600
-      privkey_path: "/home/scion/go/src/github.com/ortuman/jackal/ssl/server2.xmpp.key"
-      cert_path: "/home/scion/go/src/github.com/ortuman/jackal/ssl/server2.xmpp.crt"
+      privkey_path: "ssl/server2.xmpp.key"
+      cert_path: "ssl/server2.xmpp.crt"
