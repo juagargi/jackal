@@ -1,10 +1,11 @@
-FROM ubuntu:xenial
+FROM ubuntu:18.04
 
 # Install base
 RUN apt-get update && apt-get install --assume-yes \
   systemd \
   sudo \
-  apt-transport-https
+  apt-transport-https \
+  ca-certificates
 
 # systemd
 # Based on: https://developers.redhat.com/blog/2014/05/05/running-systemd-within-docker-container/
