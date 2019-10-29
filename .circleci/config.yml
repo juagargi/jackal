@@ -89,6 +89,9 @@ jobs:
             set -xe
             sudo -E docker exec infraAS1303 /bin/bash -c "until grep -q 'Registered beacons debug_id' /var/log/scion/bs*.log; do sleep 1; done;"
             sudo -E docker exec infraAS1305 /bin/bash -c "until grep -q 'Registered beacons debug_id' /var/log/scion/bs*.log; do sleep 1; done;"
+            sudo -E docker cp .circleci/setup/wait_for_paths.sh coreAS1301:/root/
+            sudo -E docker exec coreAS1301 /bin/bash -c "/root/wait_for_paths.sh 19-ffaa:0:1301 19-ffaa:0:1303 10"
+            sudo -E docker exec coreAS1301 /bin/bash -c "/root/wait_for_paths.sh 19-ffaa:0:1301 19-ffaa:0:1305 10"
             sudo -E docker exec coreAS1301 /bin/bash -c "scmp echo -c 3 -local 19-ffaa:0:1301,[127.0.0.1] -remote 19-ffaa:0:1303,[127.0.0.1]"
             sudo -E docker exec coreAS1301 /bin/bash -c "scmp echo -c 3 -local 19-ffaa:0:1301,[127.0.0.1] -remote 19-ffaa:0:1305,[127.0.0.1]"
 
