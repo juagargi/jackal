@@ -240,7 +240,7 @@ func TestStream_DialbackAuthorize(t *testing.T) {
 	cfg.dialer.dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
 		return outConn, nil
 	}
-	stm = newInStream(cfg, &module.Modules{}, r)
+	stm = newInStream(cfg, &module.Modules{}, r, false)
 
 	tUtilInStreamOpen(conn)
 	_ = conn.outboundRead() // read stream opening...
@@ -266,7 +266,7 @@ func TestStream_DialbackAuthorize(t *testing.T) {
 	cfg.dialer.dialTimeout = func(_, _ string, _ time.Duration) (net.Conn, error) {
 		return outConn, nil
 	}
-	stm = newInStream(cfg, &module.Modules{}, r)
+	stm = newInStream(cfg, &module.Modules{}, r, false)
 
 	tUtilInStreamOpen(conn)
 	_ = conn.outboundRead() // read stream opening...
@@ -352,7 +352,7 @@ func TestStream_SendElement(t *testing.T) {
 
 func tUtilInStreamInit(t *testing.T, router *router.Router, loadPeerCertificate bool) (*inStream, *fakeSocketConn) {
 	cfg, conn := tUtilInStreamDefaultConfig(t, loadPeerCertificate)
-	stm := newInStream(cfg, &module.Modules{}, router)
+	stm := newInStream(cfg, &module.Modules{}, router, false)
 	return stm, conn
 }
 
