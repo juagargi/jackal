@@ -81,9 +81,11 @@ services:
       - db2:mysql_host
 
   profanity1:
-    image: ubuntu:18.04
+    build:
+      context: .
+      dockerfile: Dockerfile-profanity
+    image: profanity
     container_name: profanity1
-    working_dir: /home
     networks:
       as_net:
         ipv4_address: 172.31.0.12
@@ -93,9 +95,11 @@ services:
     entrypoint: /bin/bash
 
   profanity2:
-    image: ubuntu:18.04
+    build:
+      context: .
+      dockerfile: Dockerfile-profanity
+    image: profanity
     container_name: profanity2
-    working_dir: /home
     networks:
       as_net:
         ipv4_address: 172.31.0.13

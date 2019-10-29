@@ -30,7 +30,7 @@ jobs:
       - run:
           name: Build jackal
           command: |
-            set -x
+            set -xe
             go test ./...
 
   integration:
@@ -40,8 +40,6 @@ jobs:
     environment:
       GO111MODULE: "on"
       BASH_ENV: "~/repo/.circleci/bash_env.sh"
-      SCION_SRC: "https://github.com/netsec-ethz/netsec-scion"
-      SC: "/home/scion/go/src/github.com/scionproto/scion"
       JACKAL_DIR: "/root"
       coreAS1301IP: 172.31.0.110
       infraAS1303IP: 172.31.0.111
@@ -64,6 +62,8 @@ jobs:
           name: Build containers
           command: |
             set -xe
+            sudo -E docker-compose -f .circleci/docker-compose.yml kill  # stop containers
+            sudo -E docker-compose -f .circleci/docker-compose.yml down  # bring composition down
             sudo -E docker-compose -f .circleci/docker-compose.yml build
 
       - run:
@@ -104,31 +104,29 @@ jobs:
       - run:
           name: Start XMPP client1
           command: |
-            set -x
+            set -xe
             sudo -E docker-compose -f .circleci/docker-compose.yml create profanity1
-            sudo -E docker cp ./.circleci/setup/install_client.sh profanity1:/home/install_client.sh
-            sudo -E docker cp ./.circleci/testdata/c1_data/ profanity1:/home/
+            sudo -E docker cp ./.circleci/setup/install_client.sh profanity1:/root/install_client.sh
             sudo -E docker-compose -f .circleci/docker-compose.yml up --no-recreate -d profanity1
-            sudo -E docker exec profanity1 /bin/bash -c '/home/install_client.sh'
+            sudo -E docker exec profanity1 /bin/bash -c '/root/install_client.sh'
             sudo -E docker exec -it -d profanity1 profanity -a user1
             sudo -E docker exec profanity1 /bin/bash -c 'until grep -q "logged in successfully" /root/.local/share/profanity/logs/profanity.log; do cat /root/.local/share/profanity/logs/profanity.log; sleep 1; done;'
 
       - run:
           name: Start XMPP client2
           command: |
-            set -x
+            set -xe
             sudo -E docker-compose -f .circleci/docker-compose.yml create profanity2
-            sudo -E docker cp ./.circleci/setup/install_client.sh profanity2:/home/install_client.sh
-            sudo -E docker cp ./.circleci/testdata/c2_data/ profanity2:/home/
+            sudo -E docker cp ./.circleci/setup/install_client.sh profanity2:/root/install_client.sh
             sudo -E docker-compose -f .circleci/docker-compose.yml up --no-recreate -d profanity2
-            sudo -E docker exec profanity2 /bin/bash -c '/home/install_client.sh'
+            sudo -E docker exec profanity2 /bin/bash -c '/root/install_client.sh'
             sudo -E docker exec -it -d profanity2 profanity -a user2
             sudo -E docker exec profanity2 /bin/bash -c 'until grep -q "logged in successfully" /root/.local/share/profanity/logs/profanity.log; do cat /root/.local/share/profanity/logs/profanity.log; sleep 1; done;'
 
       - run:
           name: Check if c2@s2 reached c1@s1
           command: |
-            set -x
+            set -xe
             sudo -E docker exec profanity1 /bin/bash -c 'until grep -q "user2@server2\.xmpp" /root/.local/share/profanity/logs/profanity.log; do cat /root/.local/share/profanity/logs/profanity.log; sleep 1; done;'
 
 workflows:
