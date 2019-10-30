@@ -10,11 +10,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/netsec-ethz/scion-apps/lib/scionutil"
 	"github.com/ortuman/jackal/module"
 	"github.com/ortuman/jackal/stream"
 	"github.com/ortuman/jackal/transport"
 	"github.com/ortuman/jackal/xmpp"
 	"github.com/pkg/errors"
+	"github.com/scionproto/scion/go/lib/sciond"
+	"github.com/scionproto/scion/go/lib/sock/reliable"
 )
 
 const (
@@ -24,7 +27,6 @@ const (
 	defaultDialTimeout        = time.Duration(15) * time.Second
 	defaultConnectTimeout     = time.Duration(5) * time.Second
 	defaultMaxStanzaSize      = 131072
-	defaultDispatcherPath     = "/run/shm/dispatcher/default.sock"
 )
 
 // TransportConfig represents s2s transport configuration.
@@ -38,25 +40,6 @@ type transportConfigProxy struct {
 	BindAddress string `yaml:"bind_addr"`
 	Port        int    `yaml:"port"`
 	KeepAlive   int    `yaml:"keep_alive"`
-}
-
-// TransportConfig represents s2s transport configuration.
-type ScionConfig struct {
-	Address    string
-	Port       int
-	Dispatcher string
-	KeepAlive  time.Duration
-	Key        string
-	Cert       string
-}
-
-type scionConfigProxy struct {
-	Address    string `yaml:"addr"`
-	Port       int    `yaml:"port"`
-	Dispatcher string `yaml:"dispatcher_path"`
-	KeepAlive  int    `yaml:"keep_alive"`
-	Key        string `yaml:"privkey_path"`
-	Cert       string `yaml:"cert_path"`
 }
 
 // UnmarshalYAML satisfies Unmarshaler interface.
@@ -78,6 +61,26 @@ func (c *TransportConfig) UnmarshalYAML(unmarshal func(interface{}) error) error
 	return nil
 }
 
+type ScionConfig struct {
+	Address    string
+	Port       int
+	Dispatcher string
+	Sciond     string
+	KeepAlive  time.Duration
+	Key        string
+	Cert       string
+}
+
+type scionConfigProxy struct {
+	Address    string `yaml:"addr"`
+	Port       int    `yaml:"port"`
+	Dispatcher string `yaml:"dispatcher_path"`
+	Sciond     string `yaml:sciond_path`
+	KeepAlive  int    `yaml:"keep_alive"`
+	Key        string `yaml:"privkey_path"`
+	Cert       string `yaml:"cert_path"`
+}
+
 // UnmarshalYAML satisfies Unmarshaler interface.
 func (c *ScionConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	p := scionConfigProxy{}
@@ -86,7 +89,14 @@ func (c *ScionConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	c.Address = p.Address
 	if len(c.Address) == 0 {
-		return fmt.Errorf("s2s: specify SCION listening address")
+		return errors.New("s2s: specify SCION listening address")
+	}
+	if c.Address == "localhost" {
+		address, err := scionutil.GetLocalhostString()
+		if err != nil {
+			return fmt.Errorf("Cannot resolve localhost: %v", err)
+		}
+		c.Address = address
 	}
 	c.Port = p.Port
 	if c.Port == 0 {
@@ -99,15 +109,19 @@ func (c *ScionConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	}
 	c.Key = p.Key
 	if len(c.Key) == 0 {
-		return fmt.Errorf("s2s: specify private key path")
+		return errors.New("s2s: specify private key path")
 	}
 	c.Cert = p.Cert
 	if len(c.Cert) == 0 {
-		return fmt.Errorf("s2s: specify certificate path")
+		return errors.New("s2s: specify certificate path")
 	}
 	c.Dispatcher = p.Dispatcher
 	if len(c.Dispatcher) == 0 {
-		c.Dispatcher = defaultDispatcherPath
+		c.Dispatcher = reliable.DefaultDispPath
+	}
+	c.Sciond = p.Sciond
+	if len(c.Sciond) == 0 {
+		c.Sciond = sciond.DefaultSCIONDPath
 	}
 	return nil
 }

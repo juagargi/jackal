@@ -9,11 +9,9 @@ import (
 	"sync/atomic"
 
 	"github.com/lucas-clemente/quic-go"
-	"github.com/netsec-ethz/scion-apps/lib/scionutil"
 	"github.com/ortuman/jackal/log"
 	"github.com/ortuman/jackal/transport"
 	"github.com/scionproto/scion/go/lib/addr"
-	"github.com/scionproto/scion/go/lib/sciond"
 	"github.com/scionproto/scion/go/lib/snet"
 	"github.com/scionproto/scion/go/lib/snet/squic"
 	"github.com/scionproto/scion/go/lib/sock/reliable"
@@ -34,13 +32,7 @@ func (s *scionServer) start() {
 
 func (s *scionServer) startScion() {
 	serverPort := uint16(s.cfg.Scion.Port)
-	var address *snet.Addr
-	var err error
-	if s.cfg.Scion.Address == "localhost" {
-		address, err = scionutil.GetLocalhost()
-	} else {
-		address, err = snet.AddrFromString(s.cfg.Scion.Address)
-	}
+	address, err := snet.AddrFromString(s.cfg.Scion.Address)
 	if err != nil {
 		log.Fatalf("s2s_in: can't get local scion address")
 	}
@@ -53,16 +45,14 @@ func (s *scionServer) startScion() {
 }
 
 func (s *scionServer) listenScionConn(address *snet.Addr) error {
-	var sciondPath string
-	var dispatcherPath string = "/run/shm/dispatcher/default.sock"
-
-	sciondPath = sciond.GetDefaultSCIONDPath(nil)
-	snet.Init(address.IA, sciondPath, reliable.NewDispatcherService(dispatcherPath))
-	err := squic.Init(s.cfg.Scion.Key, s.cfg.Scion.Cert)
+	err := snet.Init(address.IA, s.cfg.Scion.Sciond, reliable.NewDispatcherService(s.cfg.Scion.Dispatcher))
 	if err != nil {
 		return err
 	}
-
+	err = squic.Init(s.cfg.Scion.Key, s.cfg.Scion.Cert)
+	if err != nil {
+		return err
+	}
 	listener, err := squic.ListenSCION(nil, address, nil)
 	if err != nil {
 		return err
