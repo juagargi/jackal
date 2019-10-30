@@ -38,7 +38,7 @@ build: jackal
 .PHONY: test
 test:
 	@echo "Running tests..."
-	@go test -race $$(go list ./...)
+	@GO111MODULE=on go test -race $$(go list ./...)
 
 .PHONY: coverate
 coverage:

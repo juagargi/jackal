@@ -11,10 +11,15 @@ import (
 
 	"github.com/ortuman/jackal/stream"
 	"github.com/pkg/errors"
+
+	"github.com/netsec-ethz/scion-apps/pkg/appnet"
+	"github.com/scionproto/scion/go/lib/sciond"
+	"github.com/scionproto/scion/go/lib/sock/reliable"
 )
 
 const (
 	defaultTransportPort      = 5269
+	defaultScionTransportPort = 52690
 	defaultTransportKeepAlive = time.Duration(10) * time.Minute
 	defaultDialTimeout        = time.Duration(15) * time.Second
 	defaultConnectTimeout     = time.Duration(5) * time.Second
@@ -47,6 +52,69 @@ func (c *TransportConfig) UnmarshalYAML(unmarshal func(interface{}) error) error
 	return nil
 }
 
+type ScionConfig struct {
+	Address    string
+	Port       int
+	Dispatcher string
+	Sciond     string
+	Compress   bool
+	Key        string
+	Cert       string
+}
+
+type scionConfigProxy struct {
+	Address    string `yaml:"addr"`
+	Port       int    `yaml:"port"`
+	Dispatcher string `yaml:"dispatcher_path"`
+	Sciond     string `yaml:"sciond_path"`
+	Compress   bool   `yaml:"compress"`
+	Key        string `yaml:"privkey_path"`
+	Cert       string `yaml:"cert_path"`
+}
+
+// UnmarshalYAML satisfies Unmarshaler interface.
+func (c *ScionConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	p := scionConfigProxy{}
+	if err := unmarshal(&p); err != nil {
+		return err
+	}
+	c.Address = p.Address
+	if len(c.Address) == 0 {
+		return errors.New("s2s: specify SCION listening address")
+	}
+	if c.Address == "localhost" {
+		// TODO(juagargi) check this
+		c.Address = appnet.DefNetwork().IA.String() + ",127.0.0.1"
+		// address, err := scionutil.GetLocalhostString()
+		// if err != nil {
+		// 	return fmt.Errorf("Cannot resolve localhost: %v", err)
+		// }
+		// c.Address = address
+	}
+	c.Port = p.Port
+	if c.Port == 0 {
+		c.Port = defaultScionTransportPort
+	}
+	c.Compress = p.Compress
+	c.Key = p.Key
+	if len(c.Key) == 0 {
+		return errors.New("s2s: specify private key path")
+	}
+	c.Cert = p.Cert
+	if len(c.Cert) == 0 {
+		return errors.New("s2s: specify certificate path")
+	}
+	c.Dispatcher = p.Dispatcher
+	if len(c.Dispatcher) == 0 {
+		c.Dispatcher = reliable.DefaultDispPath
+	}
+	c.Sciond = p.Sciond
+	if len(c.Sciond) == 0 {
+		c.Sciond = sciond.DefaultAPIAddress
+	}
+	return nil
+}
+
 // TLSConfig represents a server TLS configuration.
 type TLSConfig struct {
 	CertFile    string `yaml:"cert_path"`
@@ -63,6 +131,7 @@ type Config struct {
 	DialbackSecret string
 	MaxStanzaSize  int
 	Transport      TransportConfig
+	Scion          *ScionConfig
 }
 
 type configProxy struct {
@@ -74,6 +143,7 @@ type configProxy struct {
 	DialbackSecret string          `yaml:"dialback_secret"`
 	MaxStanzaSize  int             `yaml:"max_stanza_size"`
 	Transport      TransportConfig `yaml:"transport"`
+	Scion          *ScionConfig    `yaml:"scion_transport"`
 }
 
 // UnmarshalYAML satisfies Unmarshaler interface.
@@ -109,6 +179,7 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if c.MaxStanzaSize == 0 {
 		c.MaxStanzaSize = defaultMaxStanzaSize
 	}
+	c.Scion = p.Scion
 	return nil
 }
 

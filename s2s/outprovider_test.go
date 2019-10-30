@@ -25,7 +25,7 @@ func TestOutProvider_GetOut(t *testing.T) {
 	op.dialer.(*dialer).dialContext = func(_ context.Context, _, _ string) (net.Conn, error) {
 		return newFakeSocketConn(), nil
 	}
-	out := op.GetOut("jackal.im", "jabber.org")
+	out := op.GetOut("jackal.im", "jabber.org", false)
 
 	require.NotNil(t, out)
 
@@ -45,7 +45,7 @@ func TestOutProvider_Shutdown(t *testing.T) {
 	op.dialer.(*dialer).dialContext = func(_ context.Context, _, _ string) (net.Conn, error) {
 		return newFakeSocketConn(), nil
 	}
-	out := op.GetOut("jackal.im", "jabber.org")
+	out := op.GetOut("jackal.im", "jabber.org", false)
 	_ = out.(*outStream).start(context.Background()) // start transport
 
 	require.NotNil(t, out)

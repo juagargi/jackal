@@ -1,0 +1,11 @@
+FROM ubuntu:18.04
+
+# Install base
+RUN apt-get update && apt-get install --assume-yes profanity
+
+# Set up the profanity account
+RUN mkdir --parent /root/.local/share/profanity
+
+COPY testdata/ /root/
+
+ENTRYPOINT [ "/bin/bash" ]

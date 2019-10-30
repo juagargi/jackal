@@ -1,0 +1,140 @@
+# Copyright 2019 ETH Zurich
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Python CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-python/ for more details
+#
+version: 2
+jobs:
+  unit_tests:
+    docker:
+      - image: circleci/golang:1.12
+    working_directory: /go/src/github.com/ortuman/jackal
+    environment:
+      GO111MODULE: "on"
+
+    steps:
+      - checkout
+      - run:
+          name: Build jackal
+          command: |
+            set -xe
+            go test ./...
+
+  integration:
+    docker:
+      - image: circleci/golang:1.12
+    working_directory: ~/repo
+    environment:
+      GO111MODULE: "on"
+      BASH_ENV: "~/repo/.circleci/bash_env.sh"
+      JACKAL_DIR: "/root"
+      coreAS1301IP: 172.31.0.110
+      infraAS1303IP: 172.31.0.111
+      infraAS1305IP: 172.31.0.112
+
+    steps:
+      - checkout
+
+      - setup_remote_docker:
+         docker_layer_caching: false #not available in the free plan
+
+      - run:
+          name: build
+          command: |
+            set -xe
+            make build
+
+      # Start integration tests
+      - run:
+          name: Build containers
+          command: |
+            set -xe
+            sudo -E docker-compose -f .circleci/docker-compose.yml kill  # stop containers
+            sudo -E docker-compose -f .circleci/docker-compose.yml down  # bring composition down
+            sudo -E docker-compose -f .circleci/docker-compose.yml build
+
+      - run:
+          name: Start AS Containers
+          command: |
+            set -xe
+            sudo -E docker-compose -f .circleci/docker-compose.yml up --no-start coreAS1301 infraAS1303 infraAS1305
+            for c in coreAS1301 infraAS1303 infraAS1305; do
+                sudo -E docker cp ./.circleci/setup/config/${c}_config.tar $c:/root/host_config.tar
+            done
+            for c in infraAS1303 infraAS1305; do
+                sudo -E docker cp ./.circleci/setup/start_jackal.sh $c:/root/start_jackal.sh
+                sudo -E docker cp ./jackal $c:/root/jackal
+            done
+            sudo -E docker-compose -f .circleci/docker-compose.yml up --no-recreate -d coreAS1301 infraAS1303 infraAS1305
+            for c in coreAS1301 infraAS1303 infraAS1305; do
+                sudo -E docker-compose -f .circleci/docker-compose.yml exec $c /root/loadASConfig.sh
+            done
+
+      - run:
+          name: Check SCION connections
+          command: |
+            set -xe
+            sudo -E docker exec infraAS1303 /bin/bash -c "until grep -q 'Registered beacons debug_id' /var/log/scion/bs*.log; do sleep 1; done;"
+            sudo -E docker exec infraAS1305 /bin/bash -c "until grep -q 'Registered beacons debug_id' /var/log/scion/bs*.log; do sleep 1; done;"
+            sudo -E docker cp .circleci/setup/wait_for_paths.sh coreAS1301:/root/
+            sudo -E docker exec coreAS1301 /bin/bash -c "/root/wait_for_paths.sh 19-ffaa:0:1301 19-ffaa:0:1303 10"
+            sudo -E docker exec coreAS1301 /bin/bash -c "/root/wait_for_paths.sh 19-ffaa:0:1301 19-ffaa:0:1305 10"
+            sudo -E docker exec coreAS1301 /bin/bash -c "scmp echo -c 3 -local 19-ffaa:0:1301,[127.0.0.1] -remote 19-ffaa:0:1303,[127.0.0.1]"
+            sudo -E docker exec coreAS1301 /bin/bash -c "scmp echo -c 3 -local 19-ffaa:0:1301,[127.0.0.1] -remote 19-ffaa:0:1305,[127.0.0.1]"
+
+      - run:
+          name: Start jackal servers
+          command: |
+            set -xe
+            sudo -E docker exec infraAS1303 /bin/bash -c '/root/start_jackal.sh;'
+            sudo -E docker exec infraAS1303 /bin/bash -c "until grep -q '19-ffaa:0:1303,\[127.0.0.1\]' ${JACKAL_DIR}/jackal.log; do sleep 1; done;"
+            sudo -E docker exec infraAS1305 /bin/bash -c '/root/start_jackal.sh;'
+            sudo -E docker exec infraAS1305 /bin/bash -c "until grep -q '19-ffaa:0:1305,\[127.0.0.1\]' ${JACKAL_DIR}/jackal.log; do sleep 1; done;"
+
+      - run:
+          name: Start XMPP client1
+          command: |
+            set -xe
+            sudo -E docker-compose -f .circleci/docker-compose.yml create profanity1
+            sudo -E docker cp ./.circleci/setup/install_client.sh profanity1:/root/install_client.sh
+            sudo -E docker-compose -f .circleci/docker-compose.yml up --no-recreate -d profanity1
+            sudo -E docker exec profanity1 /bin/bash -c '/root/install_client.sh'
+            sudo -E docker exec -it -d profanity1 profanity -a user1
+            sudo -E docker exec profanity1 /bin/bash -c 'until grep -q "logged in successfully" /root/.local/share/profanity/logs/profanity.log; do cat /root/.local/share/profanity/logs/profanity.log; sleep 1; done;'
+
+      - run:
+          name: Start XMPP client2
+          command: |
+            set -xe
+            sudo -E docker-compose -f .circleci/docker-compose.yml create profanity2
+            sudo -E docker cp ./.circleci/setup/install_client.sh profanity2:/root/install_client.sh
+            sudo -E docker-compose -f .circleci/docker-compose.yml up --no-recreate -d profanity2
+            sudo -E docker exec profanity2 /bin/bash -c '/root/install_client.sh'
+            sudo -E docker exec -it -d profanity2 profanity -a user2
+            sudo -E docker exec profanity2 /bin/bash -c 'until grep -q "logged in successfully" /root/.local/share/profanity/logs/profanity.log; do cat /root/.local/share/profanity/logs/profanity.log; sleep 1; done;'
+
+      - run:
+          name: Check if c2@s2 reached c1@s1
+          command: |
+            set -xe
+            sudo -E docker exec profanity1 /bin/bash -c 'until grep -q "user2@server2\.xmpp" /root/.local/share/profanity/logs/profanity.log; do cat /root/.local/share/profanity/logs/profanity.log; sleep 1; done;'
+
+workflows:
+  version: 2
+  tests:
+    jobs:
+      - unit_tests
+      - integration

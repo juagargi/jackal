@@ -15,7 +15,7 @@ import (
 	"github.com/ortuman/jackal/stream"
 )
 
-type newOutFunc = func(localDomain, remoteDomain string) *outStream
+type newOutFunc = func(localDomain, remoteDomain string, alreadySecuredAndAuthd bool) *outStream
 
 type OutProvider struct {
 	cfg            *Config
@@ -34,7 +34,7 @@ func NewOutProvider(config *Config, hosts *host.Hosts) *OutProvider {
 	}
 }
 
-func (p *OutProvider) GetOut(localDomain, remoteDomain string) stream.S2SOut {
+func (p *OutProvider) GetOut(localDomain, remoteDomain string, alreadySecuredAndAuthd bool) stream.S2SOut {
 	domainPair := getDomainPair(localDomain, remoteDomain)
 	p.mu.RLock()
 	outStm := p.outConnections[domainPair]
@@ -49,7 +49,7 @@ func (p *OutProvider) GetOut(localDomain, remoteDomain string) stream.S2SOut {
 		p.mu.Unlock()
 		return outStm
 	}
-	outStm = p.newOut(localDomain, remoteDomain)
+	outStm = p.newOut(localDomain, remoteDomain, alreadySecuredAndAuthd)
 	p.outConnections[domainPair] = outStm
 	p.mu.Unlock()
 
@@ -71,7 +71,7 @@ func (p *OutProvider) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (p *OutProvider) newOut(localDomain, remoteDomain string) *outStream {
+func (p *OutProvider) newOut(localDomain, remoteDomain string, alreadySecuredAndAuthd bool) *outStream {
 	tlsConfig := &tls.Config{
 		ServerName:   remoteDomain,
 		Certificates: p.hosts.Certificates(),
@@ -85,7 +85,7 @@ func (p *OutProvider) newOut(localDomain, remoteDomain string) *outStream {
 		tls:           tlsConfig,
 		maxStanzaSize: p.cfg.MaxStanzaSize,
 	}
-	return newOutStream(cfg, p.hosts, p.dialer)
+	return newOutStream(cfg, p.hosts, p.dialer, alreadySecuredAndAuthd)
 }
 
 func getDomainPair(localDomain, remoteDomain string) string {

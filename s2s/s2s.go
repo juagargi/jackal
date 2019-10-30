@@ -23,16 +23,23 @@ const (
 
 type s2sServer interface {
 	start()
+	// startScion()
 	shutdown(ctx context.Context) error
 }
 
 var createS2SServer = func(config *Config, mods *module.Modules, newOutFn newOutFunc, router router.Router) s2sServer {
-	return newServer(
+	s := newServer(
 		config,
 		mods,
 		newOutFn,
 		router,
 	)
+	if config.Scion != nil {
+		return &scionServer{
+			server: *s,
+		}
+	}
+	return s
 }
 
 // S2S represents a server-to-server connection manager.

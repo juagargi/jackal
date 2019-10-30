@@ -1,0 +1,13 @@
+[user1]
+enabled=true
+jid=user1@server1.xmpp
+resource=profanity
+muc.nick=user1
+presence.last=online
+presence.login=online
+priority.online=0
+priority.chat=0
+priority.away=0
+priority.xa=0
+priority.dnd=0
+password=asdf

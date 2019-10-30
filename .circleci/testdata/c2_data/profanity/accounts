@@ -1,0 +1,15 @@
+[user2]
+enabled=true
+jid=user2@server2.xmpp
+resource=profanity
+muc.nick=user2
+presence.last=online
+presence.login=online
+priority.online=0
+priority.chat=0
+priority.away=0
+priority.xa=0
+priority.dnd=0
+password=asdf
+last.activity=2019-07-29T00:12:41.365358Z
+script.start=message_test

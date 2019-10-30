@@ -52,9 +52,9 @@ type outStream struct {
 	discCh        chan *streamerror.Error
 }
 
-func newOutStream(cfg *outConfig, hosts *host.Hosts, dialer Dialer) *outStream {
+func newOutStream(cfg *outConfig, hosts *host.Hosts, dialer Dialer, alreadySecuredAndAuthd bool) *outStream {
 	id := nextOutID()
-	return &outStream{
+	s := &outStream{
 		id:       id,
 		cfg:      cfg,
 		hosts:    hosts,
@@ -63,6 +63,11 @@ func newOutStream(cfg *outConfig, hosts *host.Hosts, dialer Dialer) *outStream {
 		discCh:   make(chan *streamerror.Error),
 		runQueue: runqueue.New(id),
 	}
+	if alreadySecuredAndAuthd {
+		s.secured = 1
+		s.authenticated = 1
+	}
+	return s
 }
 
 func (s *outStream) ID() string {

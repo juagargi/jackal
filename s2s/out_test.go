@@ -22,7 +22,7 @@ func TestOutStream_Disconnect(t *testing.T) {
 	h := setupTestHosts(jackaDomain)
 
 	cfg, dialer, conn := tUtilOutStreamDefaultConfig()
-	stm := newOutStream(cfg, h, dialer)
+	stm := newOutStream(cfg, h, dialer, false)
 	_ = stm.start(context.Background())
 
 	stm.Disconnect(context.Background(), nil)
@@ -249,7 +249,7 @@ func tUtilOutStreamInitWithConfig(t *testing.T, hosts *host.Hosts, cfg *outConfi
 	d.dialContext = func(_ context.Context, _, _ string) (net.Conn, error) {
 		return conn, nil
 	}
-	stm := newOutStream(cfg, hosts, d)
+	stm := newOutStream(cfg, hosts, d, false)
 	_ = stm.start(context.Background()) // start stream
 
 	elem := conn.outboundRead()
@@ -261,7 +261,7 @@ func tUtilOutStreamInitWithConfig(t *testing.T, hosts *host.Hosts, cfg *outConfi
 
 func tUtilOutStreamInit(t *testing.T, hosts *host.Hosts) (*outStream, *fakeSocketConn) {
 	cfg, dialer, conn := tUtilOutStreamDefaultConfig()
-	stm := newOutStream(cfg, hosts, dialer)
+	stm := newOutStream(cfg, hosts, dialer, false)
 	_ = stm.start(context.Background()) // start stream
 
 	elem := conn.outboundRead()

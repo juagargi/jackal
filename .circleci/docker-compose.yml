@@ -1,0 +1,109 @@
+version: "2"
+
+networks:
+  as_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.31.0.0/16
+
+services:
+  db1:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 'password'
+    networks:
+      as_net:
+  db2:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 'password'
+    networks:
+      as_net:
+
+  coreAS1301:
+    build:
+      context: .
+      dockerfile: Dockerfile-scionHost
+    image: scionhost:tmp
+    container_name: coreAS1301
+    networks:
+      as_net:
+        ipv4_address: ${coreAS1301IP}
+    tty: true
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+
+  infraAS1303:
+    build:
+      context: .
+      dockerfile: Dockerfile-scionHost
+    image: scionhost:tmp
+    container_name: infraAS1303
+    depends_on:
+      - coreAS1301
+      - db1
+    networks:
+      as_net:
+        ipv4_address: ${infraAS1303IP}
+    environment:
+      JACKAL_ID: server1
+    tty: true
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    links:
+      - db1:mysql_host
+
+  infraAS1305:
+    build:
+      context: .
+      dockerfile: Dockerfile-scionHost
+    image: scionhost:tmp
+    container_name: infraAS1305
+    depends_on:
+      - coreAS1301
+      - db2
+    networks:
+      as_net:
+        ipv4_address: ${infraAS1305IP}
+    environment:
+      JACKAL_ID: server2
+    tty: true
+    privileged: true
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    links:
+      - db2:mysql_host
+
+  profanity1:
+    build:
+      context: .
+      dockerfile: Dockerfile-profanity
+    image: profanity
+    container_name: profanity1
+    networks:
+      as_net:
+        ipv4_address: 172.31.0.12
+    environment:
+      CLIENT_ID: client1
+    tty: true
+    entrypoint: /bin/bash
+
+  profanity2:
+    build:
+      context: .
+      dockerfile: Dockerfile-profanity
+    image: profanity
+    container_name: profanity2
+    networks:
+      as_net:
+        ipv4_address: 172.31.0.13
+    environment:
+      CLIENT_ID: client2
+    tty: true
+    entrypoint: /bin/bash

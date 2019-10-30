@@ -49,7 +49,7 @@ type inStream struct {
 	runQueue      *runqueue.RunQueue
 }
 
-func newInStream(config *inConfig, tr transport.Transport, mods *module.Modules, newOutFn newOutFunc, router router.Router) *inStream {
+func newInStream(config *inConfig, tr transport.Transport, mods *module.Modules, newOutFn newOutFunc, router router.Router, alreadySecuredAndAuthd bool) *inStream {
 	id := nextInID()
 	s := &inStream{
 		id:       id,
@@ -59,6 +59,10 @@ func newInStream(config *inConfig, tr transport.Transport, mods *module.Modules,
 		newOut:   newOutFn,
 		mods:     mods,
 		runQueue: runqueue.New(id),
+	}
+	if alreadySecuredAndAuthd {
+		s.secured = 1
+		s.authenticated = 1
 	}
 	// start s2s in session
 	s.restartSession()
@@ -334,8 +338,8 @@ func (s *inStream) authorizeDialbackKey(ctx context.Context, elem xmpp.XElement)
 	log.Infof("authorizing dialback key: %s...", elem.Text())
 
 	// verify stream
-	outStm := s.newOut(s.router.Hosts().DefaultHostName(), elem.From())
-
+	isScionAddress, _ := scionLookup(elem.From())
+	outStm := s.newOut(s.router.Hosts().DefaultHostName(), elem.From(), isScionAddress)
 	verifyCh := outStm.verify(ctx, s.sess.StreamID(), elem.To(), elem.From(), elem.Text())
 
 	// wait remote server verification

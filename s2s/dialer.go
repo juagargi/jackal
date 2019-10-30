@@ -11,7 +11,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/netsec-ethz/scion-apps/pkg/appnet"
 	"github.com/ortuman/jackal/log"
+	"github.com/scionproto/scion/go/lib/snet"
 )
 
 type Dialer interface {
@@ -35,6 +37,33 @@ func newDialer() *dialer {
 }
 
 func (d *dialer) Dial(ctx context.Context, remoteDomain string) (net.Conn, error) {
+	var conn net.Conn
+	var err error
+	isSCION, scionRAddr := scionLookup(remoteDomain)
+	if isSCION {
+		conn, err = d.dialQUIC(scionRAddr)
+	} else {
+		conn, err = d.dialTCP(ctx, remoteDomain)
+	}
+	return conn, err
+}
+
+func scionLookup(remoteDomain string) (bool, *snet.UDPAddr) {
+	host, port, err := net.SplitHostPort(remoteDomain)
+	if err != nil {
+		host = remoteDomain
+		port = "52690"
+	}
+	p, err := strconv.ParseUint(port, 10, 16)
+	addr, err := appnet.ResolveUDPAddr(host + ".")
+	if err != nil {
+		return false, nil
+	}
+	addr.Host.Port = int(p)
+	return true, addr
+}
+
+func (d *dialer) dialTCP(ctx context.Context, remoteDomain string) (net.Conn, error) {
 	_, address, err := d.srvResolve("xmpp-server", "tcp", remoteDomain)
 	if err != nil {
 		log.Warnf("srv lookup error: %v", err)
@@ -51,4 +80,8 @@ func (d *dialer) Dial(ctx context.Context, remoteDomain string) (net.Conn, error
 		return nil, err
 	}
 	return conn, err
+}
+
+func (d *dialer) dialQUIC(raddr *snet.UDPAddr) (net.Conn, error) {
+	return appnet.DialAddr(raddr)
 }

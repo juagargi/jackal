@@ -89,6 +89,8 @@ func (s *server) listenConn(address string) error {
 	return nil
 }
 
+// TODO this file need amendments to support SCION
+
 func (s *server) startInStream(tr transport.Transport) {
 	stm := newInStream(
 		&inConfig{
@@ -103,6 +105,7 @@ func (s *server) startInStream(tr transport.Transport) {
 		s.mods,
 		s.newOutFn,
 		s.router,
+		false,
 	)
 	s.registerInStream(stm)
 }
