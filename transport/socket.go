@@ -44,8 +44,7 @@ func (s *socketTransport) Read(p []byte) (n int, err error) {
 	if s.keepAlive > 0 {
 		s.conn.SetReadDeadline(time.Now().Add(s.keepAlive))
 	}
-	n, err = s.br.Read(p)
-	return n, err
+	return s.br.Read(p)
 }
 
 func (s *socketTransport) Write(p []byte) (n int, err error) {
