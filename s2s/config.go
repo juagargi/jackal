@@ -141,7 +141,6 @@ type Config struct {
 	MaxStanzaSize  int
 	Transport      TransportConfig
 	Scion          *ScionConfig
-	ListenScion    bool
 }
 
 type configProxy struct {
@@ -179,9 +178,6 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		c.MaxStanzaSize = defaultMaxStanzaSize
 	}
 	c.Scion = p.Scion
-	if c.Scion != nil {
-		c.ListenScion = true
-	}
 	return nil
 }
 

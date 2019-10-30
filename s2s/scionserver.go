@@ -24,7 +24,7 @@ type scionServer struct {
 }
 
 func (s *scionServer) start() {
-	if s.cfg.ListenScion {
+	if s.cfg.Scion != nil {
 		go s.startScion()
 	}
 	s.server.start()

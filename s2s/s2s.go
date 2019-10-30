@@ -38,7 +38,7 @@ var createS2SServer = func(config *Config, mods *module.Modules, router *router.
 		mods:   mods,
 		dialer: newDialer(config, router),
 	}
-	if config.ListenScion {
+	if config.Scion != nil {
 		return &scionServer{
 			server: s,
 		}
